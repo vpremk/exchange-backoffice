@@ -1,0 +1,23 @@
+{
+  "name": "exchange-backoffice",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install && cd ../automation && npm install && npx playwright install chromium",
+    "dev:api": "cd backend && npm run dev",
+    "dev:worker": "cd backend && npm run worker",
+    "dev:ui": "cd frontend && npm run dev",
+    "db:push": "cd backend && npx prisma db push",
+    "db:seed": "cd backend && npx prisma db seed",
+    "db:setup": "cd backend && npx prisma db push && npx prisma db seed",
+    "test": "cd automation && npm test",
+    "test:headed": "cd automation && npm run test:headed",
+    "test:ui": "cd automation && npm run test:ui",
+    "test:auth": "cd automation && npm run test:auth",
+    "test:upload": "cd automation && npm run test:upload",
+    "test:review": "cd automation && npm run test:review",
+    "test:dashboard": "cd automation && npm run test:dashboard",
+    "test:rbac": "cd automation && npm run test:rbac",
+    "test:report": "cd automation && npm run report"
+  }
+}

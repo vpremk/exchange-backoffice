@@ -1,0 +1,22 @@
+{
+  "name": "exchange-backoffice-automation",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "npx bddgen && npx playwright test",
+    "test:headed": "npx bddgen && npx playwright test --headed",
+    "test:ui": "npx bddgen && npx playwright test --ui",
+    "test:debug": "npx bddgen && PWDEBUG=1 npx playwright test",
+    "test:auth": "npx bddgen && npx playwright test --grep @auth",
+    "test:upload": "npx bddgen && npx playwright test --grep @upload",
+    "test:review": "npx bddgen && npx playwright test --grep @review",
+    "test:dashboard": "npx bddgen && npx playwright test --grep @dashboard",
+    "test:rbac": "npx bddgen && npx playwright test --grep @rbac",
+    "test:sla": "npx bddgen && npx playwright test --grep @sla",
+    "report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "playwright-bdd": "^8.4.2"
+  }
+}

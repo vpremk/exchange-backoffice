@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUBMITTER
+  VALIDATOR
+  SUPERVISOR
+}
+
+enum DocType {
+  TRADE_CONFIRMATION
+  SETTLEMENT_INSTRUCTION
+  KYC_DOCUMENT
+  REGULATORY_FILING
+  UNKNOWN
+}
+
+enum DocStatus {
+  UPLOADED
+  OCR_PROCESSING
+  EXTRACTING
+  VALIDATING
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  ERROR
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(SUBMITTER)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submittedDocs Document[]   @relation("Submitter")
+  assignedDocs  Document[]   @relation("Assignee")
+  reviews       Review[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Document {
+  id             String    @id @default(cuid())
+  fileName       String
+  mimeType       String
+  fileSize       Int
+  s3Key          String
+  docType        DocType   @default(UNKNOWN)
+  status         DocStatus @default(UPLOADED)
+  slaDeadline    DateTime?
+  classConfidence Float?
+  ocrText        String?   @db.Text
+  extractedFields Json?
+  validationErrors Json?
+  errorReason    String?
+
+  submitterId    String
+  submitter      User      @relation("Submitter", fields: [submitterId], references: [id])
+  assigneeId     String?
+  assignee       User?     @relation("Assignee", fields: [assigneeId], references: [id])
+
+  reviews        Review[]
+  auditLogs      AuditLog[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([docType])
+  @@index([slaDeadline])
+  @@index([assigneeId])
+  @@map("documents")
+}
+
+model Review {
+  id         String    @id @default(cuid())
+  decision   DocStatus // APPROVED | REJECTED | CHANGES_REQUESTED
+  comment    String?   @db.Text
+  documentId String
+  document   Document  @relation(fields: [documentId], references: [id])
+  reviewerId String
+  reviewer   User      @relation(fields: [reviewerId], references: [id])
+  createdAt  DateTime  @default(now())
+
+  @@map("reviews")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String   // e.g. "DOCUMENT_UPLOADED", "STATUS_CHANGED", "REVIEW_SUBMITTED"
+  entityType String   // "Document", "Review"
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id])
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([documentId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

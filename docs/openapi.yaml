@@ -1,0 +1,182 @@
+openapi: 3.0.3
+info:
+  title: Exchange Back-Office API
+  version: 0.1.0
+  description: Document validation workflow for exchange operations
+
+servers:
+  - url: http://localhost:3001/api
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Document:
+      type: object
+      properties:
+        id: { type: string }
+        fileName: { type: string }
+        mimeType: { type: string }
+        fileSize: { type: integer }
+        docType: { type: string, enum: [TRADE_CONFIRMATION, SETTLEMENT_INSTRUCTION, KYC_DOCUMENT, REGULATORY_FILING, UNKNOWN] }
+        status: { type: string, enum: [UPLOADED, OCR_PROCESSING, EXTRACTING, VALIDATING, PENDING_REVIEW, APPROVED, REJECTED, CHANGES_REQUESTED, ERROR] }
+        classConfidence: { type: number, nullable: true }
+        extractedFields: { type: object, nullable: true }
+        validationErrors: { type: array, nullable: true }
+        slaDeadline: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Login (dev stub)
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+              required: [email]
+      responses:
+        "200":
+          description: JWT token + user info
+
+  /documents/upload:
+    post:
+      summary: Upload a document
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Document created, pipeline started
+
+  /documents:
+    get:
+      summary: List documents
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: docType
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated document list
+
+  /documents/{id}:
+    get:
+      summary: Get document detail with reviews
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Document with extracted fields, validation errors, reviews
+
+  /documents/{id}/review:
+    post:
+      summary: Submit review decision
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision: { type: string, enum: [APPROVED, REJECTED, CHANGES_REQUESTED] }
+                comment: { type: string }
+              required: [decision]
+      responses:
+        "200":
+          description: Review recorded
+
+  /documents/{id}/assign:
+    post:
+      summary: Assign document to validator
+      responses:
+        "200":
+          description: Document assigned
+
+  /documents/{id}/retry:
+    post:
+      summary: Retry failed document pipeline
+      responses:
+        "200":
+          description: Document re-queued
+
+  /documents/{id}/download:
+    get:
+      summary: Get presigned download URL
+      responses:
+        "200":
+          description: Presigned S3 URL
+
+  /metrics/overview:
+    get:
+      summary: Dashboard overview (status counts, SLA risk, recent reviews)
+      responses:
+        "200":
+          description: Aggregated metrics
+
+  /metrics/validator-productivity:
+    get:
+      summary: Reviews per validator (7 days)
+      responses:
+        "200":
+          description: Array of reviewer stats
+
+  /metrics/error-reasons:
+    get:
+      summary: Top error reasons
+      responses:
+        "200":
+          description: Array of {reason, count}
+
+  /metrics/sla-performance:
+    get:
+      summary: SLA adherence stats
+      responses:
+        "200":
+          description: SLA metrics with breakdown by doc type
+
+  /metrics/audit-log:
+    get:
+      summary: Audit log (supervisor only)
+      parameters:
+        - name: documentId
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Paginated audit entries
