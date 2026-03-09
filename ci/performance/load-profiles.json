@@ -1,0 +1,82 @@
+{
+  "profiles": {
+    "baseline": {
+      "description": "Expected load — establishes performance benchmarks",
+      "virtual_users": 10,
+      "duration": "10m",
+      "ramp_up": "30s",
+      "think_time_min_s": 1,
+      "think_time_max_s": 5,
+      "user_distribution": {
+        "SUBMITTER": 0.5,
+        "VALIDATOR": 0.3,
+        "SUPERVISOR": 0.2
+      },
+      "actions_per_minute": {
+        "login": 2,
+        "list_documents": 10,
+        "upload_document": 3,
+        "review_document": 2,
+        "health_check": 5
+      }
+    },
+    "peak": {
+      "description": "2x expected load — verifies system handles anticipated peaks",
+      "virtual_users": 20,
+      "duration": "15m",
+      "ramp_up": "1m",
+      "think_time_min_s": 0.5,
+      "think_time_max_s": 3,
+      "user_distribution": {
+        "SUBMITTER": 0.5,
+        "VALIDATOR": 0.3,
+        "SUPERVISOR": 0.2
+      },
+      "actions_per_minute": {
+        "login": 5,
+        "list_documents": 20,
+        "upload_document": 8,
+        "review_document": 5,
+        "health_check": 10
+      }
+    },
+    "stress": {
+      "description": "Gradual increase to 5x — find the breaking point",
+      "virtual_users_start": 0,
+      "virtual_users_max": 50,
+      "stages": [
+        { "duration": "2m", "target_vus": 10 },
+        { "duration": "5m", "target_vus": 25 },
+        { "duration": "5m", "target_vus": 50 },
+        { "duration": "3m", "target_vus": 0 }
+      ],
+      "think_time_min_s": 0.5,
+      "think_time_max_s": 2
+    },
+    "spike": {
+      "description": "Sudden 10x burst for 60s — verify recovery without intervention",
+      "virtual_users_start": 5,
+      "stages": [
+        { "duration": "10s", "target_vus": 100 },
+        { "duration": "60s", "target_vus": 100 },
+        { "duration": "10s", "target_vus": 5 },
+        { "duration": "2m", "target_vus": 5 }
+      ],
+      "think_time_min_s": 0.2,
+      "think_time_max_s": 1
+    },
+    "soak": {
+      "description": "Expected load sustained for 1 hour — detect memory leaks and exhaustion",
+      "virtual_users": 10,
+      "duration": "1h",
+      "ramp_up": "1m",
+      "think_time_min_s": 1,
+      "think_time_max_s": 5,
+      "monitoring": {
+        "sample_interval_s": 30,
+        "alert_on_memory_growth_percent": 20,
+        "alert_on_response_time_growth_percent": 50
+      }
+    }
+  }
+}

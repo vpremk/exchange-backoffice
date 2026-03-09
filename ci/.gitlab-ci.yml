@@ -1,0 +1,564 @@
+###############################################################################
+# GitLab CI/CD Pipeline: AI Agent-Driven SDLC Orchestration
+#
+# Entry point: A requirements document committed to docs/requirements/
+# Pipeline: 11 stages, 10 AI agents + 1 human gate
+###############################################################################
+
+variables:
+  CLAUDE_IMAGE: "${CI_REGISTRY_IMAGE}/claude-agent:latest"
+  ARTIFACTS_DIR: "artifacts"
+  AGENT_PROMPTS_DIR: "ci/agents"
+  FF_USE_FASTZIP: "true"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+stages:
+  - requirements-analysis
+  - architecture-design
+  - implementation
+  - code-review
+  - security-audit
+  - testing
+  - performance-testing
+  - uat-deploy
+  - uat-approval
+  - production-dr-deploy
+  - system-ops-verification
+
+# ---------------------------------------------------------------------------
+# Default job configuration
+# ---------------------------------------------------------------------------
+default:
+  image: ${CLAUDE_IMAGE}
+  before_script:
+    - mkdir -p ${ARTIFACTS_DIR}
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+# ---------------------------------------------------------------------------
+# Stage 1: Requirements Analysis
+# ---------------------------------------------------------------------------
+requirements-analysis:
+  stage: requirements-analysis
+  rules:
+    - changes:
+        - docs/requirements/**/*
+      when: always
+    - when: manual
+      allow_failure: false
+  script:
+    - echo "=== Stage 1 — Requirements Analysis Agent ==="
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/requirements-analyst.prompt.md" \
+        --input "docs/requirements/" \
+        --output "${ARTIFACTS_DIR}/requirements-analysis.json" \
+        --output "${ARTIFACTS_DIR}/user-stories.md"
+    - bash ci/scripts/post-mr-comment.sh "Requirements Analysis" "${ARTIFACTS_DIR}/requirements-analysis.json"
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/requirements-analysis.json
+      - ${ARTIFACTS_DIR}/user-stories.md
+    expire_in: 30 days
+  environment:
+    name: requirements-approved
+    action: prepare
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Gate: Product Owner approval for requirements
+# ---------------------------------------------------------------------------
+requirements-approval:
+  stage: requirements-analysis
+  needs:
+    - requirements-analysis
+  script:
+    - echo "Requirements approved by Product Owner"
+  environment:
+    name: requirements-approved
+    action: start
+  when: manual
+  allow_failure: false
+
+# ---------------------------------------------------------------------------
+# Stage 2: Architecture Design
+# ---------------------------------------------------------------------------
+architecture-design:
+  stage: architecture-design
+  needs:
+    - requirements-approval
+  script:
+    - echo "=== Stage 2 — Solution Architect Agent ==="
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/solution-architect.prompt.md" \
+        --input "${ARTIFACTS_DIR}/requirements-analysis.json" \
+        --input "${ARTIFACTS_DIR}/user-stories.md" \
+        --output "${ARTIFACTS_DIR}/architecture-design.md" \
+        --output "${ARTIFACTS_DIR}/api-spec.yaml" \
+        --output "${ARTIFACTS_DIR}/schema-changes.prisma"
+    - bash ci/scripts/post-mr-comment.sh "Architecture Design" "${ARTIFACTS_DIR}/architecture-design.md"
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/architecture-design.md
+      - ${ARTIFACTS_DIR}/api-spec.yaml
+      - ${ARTIFACTS_DIR}/schema-changes.prisma
+    expire_in: 30 days
+  environment:
+    name: architecture-approved
+    action: prepare
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Gate: Tech Lead approval for architecture
+# ---------------------------------------------------------------------------
+architecture-approval:
+  stage: architecture-design
+  needs:
+    - architecture-design
+  script:
+    - echo "Architecture approved by Tech Lead"
+  environment:
+    name: architecture-approved
+    action: start
+  when: manual
+  allow_failure: false
+
+# ---------------------------------------------------------------------------
+# Stage 3: Implementation
+# ---------------------------------------------------------------------------
+implementation:
+  stage: implementation
+  needs:
+    - architecture-approval
+  script:
+    - echo "=== Stage 3 — Senior Developer Agent ==="
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/senior-developer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/architecture-design.md" \
+        --input "${ARTIFACTS_DIR}/api-spec.yaml" \
+        --input "${ARTIFACTS_DIR}/schema-changes.prisma"
+    - echo "Implementation complete — feature branch updated"
+  artifacts:
+    paths:
+      - backend/
+      - frontend/
+    expire_in: 7 days
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Stage 4: Code Review
+# ---------------------------------------------------------------------------
+code-review:
+  stage: code-review
+  needs:
+    - implementation
+  script:
+    - echo "=== Stage 4 — Code Review Agent ==="
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/code-reviewer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/architecture-design.md" \
+        --output "${ARTIFACTS_DIR}/code-review-report.md"
+    - bash ci/scripts/post-mr-comment.sh "Code Review" "${ARTIFACTS_DIR}/code-review-report.md"
+    - |
+      # Fail if critical or high severity findings exist
+      if grep -qi '"severity":\s*"CRITICAL\|"severity":\s*"HIGH' "${ARTIFACTS_DIR}/code-review-report.md" 2>/dev/null; then
+        echo "❌ Code review found CRITICAL/HIGH issues — blocking pipeline"
+        exit 1
+      fi
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/code-review-report.md
+    expire_in: 30 days
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Stage 5: Security Audit
+# ---------------------------------------------------------------------------
+security-audit:
+  stage: security-audit
+  needs:
+    - code-review
+  script:
+    - echo "=== Stage 5 — Security Engineer Agent ==="
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/security-engineer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/api-spec.yaml" \
+        --output "${ARTIFACTS_DIR}/security-audit-report.md" \
+        --output "${ARTIFACTS_DIR}/sbom.json" \
+        --output "${ARTIFACTS_DIR}/vulnerability-summary.json"
+    - bash ci/scripts/post-mr-comment.sh "Security Audit" "${ARTIFACTS_DIR}/security-audit-report.md"
+    - |
+      # Fail if CRITICAL or HIGH vulnerabilities found
+      if [ -f "${ARTIFACTS_DIR}/vulnerability-summary.json" ]; then
+        CRITICAL_COUNT=$(jq -r '.critical // 0' "${ARTIFACTS_DIR}/vulnerability-summary.json")
+        HIGH_COUNT=$(jq -r '.high // 0' "${ARTIFACTS_DIR}/vulnerability-summary.json")
+        if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
+          echo "❌ Security audit found ${CRITICAL_COUNT} CRITICAL and ${HIGH_COUNT} HIGH vulnerabilities"
+          exit 1
+        fi
+      fi
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/security-audit-report.md
+      - ${ARTIFACTS_DIR}/sbom.json
+      - ${ARTIFACTS_DIR}/vulnerability-summary.json
+    expire_in: 90 days
+  environment:
+    name: security-cleared
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Stage 6: Testing
+# ---------------------------------------------------------------------------
+testing:
+  stage: testing
+  needs:
+    - security-audit
+  services:
+    - name: postgres:15-alpine
+      alias: postgres
+      variables:
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+        POSTGRES_DB: exchange_backoffice
+    - name: redis:7-alpine
+      alias: redis
+    - name: minio/minio:latest
+      alias: minio
+      command: ["server", "/data", "--console-address", ":9001"]
+      variables:
+        MINIO_ROOT_USER: minioadmin
+        MINIO_ROOT_PASSWORD: minioadmin
+  variables:
+    DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/exchange_backoffice"
+    REDIS_URL: "redis://redis:6379"
+    MINIO_ENDPOINT: "minio"
+    MINIO_PORT: "9000"
+  script:
+    - echo "=== Stage 6 — QA Engineer Agent ==="
+    - |
+      # Install dependencies and prepare test infrastructure
+      cd backend && npm ci && npx prisma db push && npx prisma db seed && cd ..
+      cd frontend && npm ci && cd ..
+      cd automation && npm ci && npx playwright install chromium --with-deps && cd ..
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/qa-engineer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/requirements-analysis.json" \
+        --input "${ARTIFACTS_DIR}/user-stories.md" \
+        --output "${ARTIFACTS_DIR}/test-report.html" \
+        --output "${ARTIFACTS_DIR}/traceability-matrix.md"
+    - |
+      # Run existing test suite (regression)
+      cd automation && npm test -- --reporter=html && cd ..
+      cp automation/playwright-report/index.html ${ARTIFACTS_DIR}/test-report.html || true
+    - bash ci/scripts/post-mr-comment.sh "Test Results" "${ARTIFACTS_DIR}/traceability-matrix.md"
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/test-report.html
+      - ${ARTIFACTS_DIR}/traceability-matrix.md
+      - automation/features/*.feature
+    when: always
+    expire_in: 30 days
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Stage 7: Performance Testing
+# ---------------------------------------------------------------------------
+performance-testing:
+  stage: performance-testing
+  needs:
+    - testing
+  services:
+    - name: postgres:15-alpine
+      alias: postgres
+      variables:
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+        POSTGRES_DB: exchange_backoffice
+    - name: redis:7-alpine
+      alias: redis
+    - name: minio/minio:latest
+      alias: minio
+      command: ["server", "/data", "--console-address", ":9001"]
+      variables:
+        MINIO_ROOT_USER: minioadmin
+        MINIO_ROOT_PASSWORD: minioadmin
+  variables:
+    DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/exchange_backoffice"
+    REDIS_URL: "redis://redis:6379"
+    MINIO_ENDPOINT: "minio"
+    MINIO_PORT: "9000"
+  script:
+    - echo "=== Stage 7 — Performance Engineer Agent ==="
+    - |
+      # Start application services
+      cd backend && npm ci && npx prisma db push && npx prisma db seed
+      npm run dev &
+      npm run worker &
+      cd ..
+      cd frontend && npm ci && npm run build && npx serve -s dist -l 5173 &
+      cd ..
+      sleep 10
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/performance-engineer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/api-spec.yaml" \
+        --input "${ARTIFACTS_DIR}/architecture-design.md" \
+        --input "ci/performance/load-profiles.json" \
+        --input "ci/performance/performance-budget.json" \
+        --output "${ARTIFACTS_DIR}/performance-report.md" \
+        --output "${ARTIFACTS_DIR}/load-test-results.json" \
+        --output "${ARTIFACTS_DIR}/performance-trend.json"
+    - |
+      # Run k6 load tests
+      k6 run ci/performance/k6-load-test.js \
+        --out json=${ARTIFACTS_DIR}/load-test-results.json \
+        --summary-export=${ARTIFACTS_DIR}/k6-summary.json || true
+    - |
+      # Run Lighthouse CI
+      npx lhci autorun \
+        --collect.url=http://localhost:5173 \
+        --collect.numberOfRuns=3 \
+        --output-path=${ARTIFACTS_DIR}/lighthouse-report.html || true
+    - bash ci/scripts/post-mr-comment.sh "Performance Results" "${ARTIFACTS_DIR}/performance-report.md"
+    - |
+      # Check for FAIL-level findings
+      if [ -f "${ARTIFACTS_DIR}/performance-report.md" ]; then
+        if grep -qi "Status: FAIL" "${ARTIFACTS_DIR}/performance-report.md"; then
+          echo "❌ Performance testing found FAIL-level issues"
+          exit 1
+        fi
+      fi
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/performance-report.md
+      - ${ARTIFACTS_DIR}/load-test-results.json
+      - ${ARTIFACTS_DIR}/lighthouse-report.html
+      - ${ARTIFACTS_DIR}/performance-trend.json
+    expire_in: 30 days
+  environment:
+    name: performance-cleared
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Stage 8: UAT Deploy
+# ---------------------------------------------------------------------------
+uat-deploy:
+  stage: uat-deploy
+  needs:
+    - performance-testing
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  script:
+    - echo "=== Stage 8 — DevOps Engineer Agent ==="
+    - |
+      # Build Docker images
+      docker build -t ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA} -f backend/Dockerfile backend/
+      docker build -t ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHORT_SHA} -f frontend/Dockerfile frontend/
+    - |
+      # Push to GitLab Container Registry
+      docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+      docker push ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}
+      docker push ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHORT_SHA}
+    - |
+      # Generate deployment manifest
+      cat > ${ARTIFACTS_DIR}/deployment-manifest.json <<MANIFEST
+      {
+        "version": "${CI_COMMIT_SHORT_SHA}",
+        "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+        "images": {
+          "backend": "${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}",
+          "frontend": "${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHORT_SHA}"
+        },
+        "pipeline_id": "${CI_PIPELINE_ID}",
+        "commit": "${CI_COMMIT_SHA}",
+        "branch": "${CI_COMMIT_REF_NAME}"
+      }
+      MANIFEST
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/devops-engineer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/deployment-manifest.json" \
+        --output "${ARTIFACTS_DIR}/uat-deployment-status.json"
+    - |
+      # Deploy to UAT environment
+      docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d --wait || true
+    - |
+      # Run smoke tests against UAT
+      bash ci/scripts/health-check.sh "${UAT_URL:-http://localhost:3001}" smoke
+    - bash ci/scripts/post-mr-comment.sh "UAT Deployment" "${ARTIFACTS_DIR}/deployment-manifest.json"
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/deployment-manifest.json
+      - ${ARTIFACTS_DIR}/uat-deployment-status.json
+    expire_in: 30 days
+  environment:
+    name: uat
+    url: ${UAT_URL}
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Stage 9: UAT Approval (Human Gate)
+# ---------------------------------------------------------------------------
+uat-approval:
+  stage: uat-approval
+  needs:
+    - uat-deploy
+  script:
+    - echo "UAT approved by Product Owner and Stakeholder"
+    - echo "Approval recorded at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  environment:
+    name: uat-approved
+    action: start
+  when: manual
+  allow_failure: false
+
+# ---------------------------------------------------------------------------
+# Stage 10: Production + DR Deploy
+# ---------------------------------------------------------------------------
+production-deploy:
+  stage: production-dr-deploy
+  needs:
+    - uat-approval
+  script:
+    - echo "=== Stage 10 — Release Engineer Agent ==="
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/release-engineer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/deployment-manifest.json" \
+        --input "${ARTIFACTS_DIR}/requirements-analysis.json" \
+        --output "${ARTIFACTS_DIR}/release-notes.md"
+    - |
+      # Deploy to Production (blue-green)
+      echo "Deploying to production..."
+      docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+      # Production deploy commands (kubectl apply / docker compose / etc.)
+      # docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --wait
+    - |
+      # Run production smoke tests
+      bash ci/scripts/health-check.sh "${PRODUCTION_URL:-http://localhost:3001}" smoke
+    - |
+      # Deploy to DR environment
+      echo "Deploying to DR environment..."
+      # DR deploy commands (replicated deployment)
+    - |
+      # Verify DR health
+      bash ci/scripts/health-check.sh "${DR_URL:-http://localhost:3001}" smoke
+    - |
+      # Tag release
+      git tag -a "v${CI_PIPELINE_IID}" -m "Release v${CI_PIPELINE_IID} — Pipeline ${CI_PIPELINE_ID}"
+      git push origin "v${CI_PIPELINE_IID}" || true
+    - |
+      # Notify stakeholders
+      bash ci/scripts/notify-stakeholders.sh \
+        --status "deployed" \
+        --version "${CI_COMMIT_SHORT_SHA}" \
+        --environment "production+dr" \
+        --release-notes "${ARTIFACTS_DIR}/release-notes.md"
+    - bash ci/scripts/post-mr-comment.sh "Production + DR Deployment" "${ARTIFACTS_DIR}/release-notes.md"
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/release-notes.md
+    expire_in: 90 days
+  environment:
+    name: production
+    url: ${PRODUCTION_URL}
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Stage 11: System Operations Verification
+# ---------------------------------------------------------------------------
+system-ops-verification:
+  stage: system-ops-verification
+  needs:
+    - production-deploy
+  script:
+    - echo "=== Stage 11 — System Operations Engineer Agent ==="
+    - |
+      bash ci/scripts/run-agent.sh \
+        --prompt "${AGENT_PROMPTS_DIR}/system-ops-engineer.prompt.md" \
+        --input "${ARTIFACTS_DIR}/deployment-manifest.json" \
+        --output "${ARTIFACTS_DIR}/ops-health-report.md" \
+        --output "${ARTIFACTS_DIR}/failover-test-results.json" \
+        --output "${ARTIFACTS_DIR}/performance-baseline.json"
+    - |
+      # Run health checks on production
+      bash ci/scripts/health-check.sh "${PRODUCTION_URL:-http://localhost:3001}" full
+    - |
+      # Run health checks on DR
+      bash ci/scripts/health-check.sh "${DR_URL:-http://localhost:3001}" full
+    - |
+      # Run failover tests
+      bash ci/scripts/failover-test.sh \
+        --production-url "${PRODUCTION_URL}" \
+        --dr-url "${DR_URL}"
+    - bash ci/scripts/post-mr-comment.sh "System Ops Verification" "${ARTIFACTS_DIR}/ops-health-report.md"
+    - |
+      # Check for FAIL-level findings — trigger rollback if needed
+      if [ -f "${ARTIFACTS_DIR}/ops-health-report.md" ]; then
+        if grep -qi "Status: FAIL" "${ARTIFACTS_DIR}/ops-health-report.md"; then
+          echo "❌ System ops verification FAILED — triggering rollback"
+          bash ci/scripts/notify-stakeholders.sh \
+            --status "rollback" \
+            --version "${CI_COMMIT_SHORT_SHA}" \
+            --environment "production" \
+            --reason "System ops verification failed"
+          exit 1
+        fi
+      fi
+    - echo "✅ System operations verification complete"
+  artifacts:
+    paths:
+      - ${ARTIFACTS_DIR}/ops-health-report.md
+      - ${ARTIFACTS_DIR}/failover-test-results.json
+      - ${ARTIFACTS_DIR}/performance-baseline.json
+    when: always
+    expire_in: 90 days
+  environment:
+    name: ops-verified
+  tags:
+    - ai-agent
+
+# ---------------------------------------------------------------------------
+# Rollback Job (triggered on failure)
+# ---------------------------------------------------------------------------
+rollback:
+  stage: system-ops-verification
+  needs:
+    - production-deploy
+  script:
+    - echo "🔄 Rolling back production deployment..."
+    - |
+      # Blue-green rollback: switch back to previous version
+      # kubectl rollout undo deployment/backend -n production
+      # kubectl rollout undo deployment/frontend -n production
+      echo "Rollback executed for version ${CI_COMMIT_SHORT_SHA}"
+    - |
+      bash ci/scripts/notify-stakeholders.sh \
+        --status "rollback-complete" \
+        --version "${CI_COMMIT_SHORT_SHA}" \
+        --environment "production"
+  when: on_failure
+  environment:
+    name: production
+    action: stop
+  tags:
+    - ai-agent

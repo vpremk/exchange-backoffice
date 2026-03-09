@@ -1,0 +1,84 @@
+{
+  "sla": {
+    "api": {
+      "read_endpoints": {
+        "p95_ms": 500,
+        "p99_ms": 1000,
+        "description": "GET requests for data retrieval"
+      },
+      "write_endpoints": {
+        "p95_ms": 2000,
+        "p99_ms": 5000,
+        "description": "POST/PUT/DELETE requests for data mutation"
+      },
+      "file_upload": {
+        "p95_ms": 5000,
+        "p99_ms": 10000,
+        "description": "File upload operations"
+      },
+      "health_check": {
+        "p95_ms": 100,
+        "p99_ms": 200,
+        "description": "Health check endpoint"
+      }
+    },
+    "error_rate": {
+      "baseline_max_percent": 0.1,
+      "peak_max_percent": 1.0,
+      "stress_max_percent": 5.0
+    },
+    "throughput": {
+      "min_requests_per_second": 50,
+      "description": "Minimum sustained throughput at baseline load"
+    }
+  },
+  "frontend": {
+    "lighthouse": {
+      "performance_score_min": 90,
+      "accessibility_score_min": 90,
+      "seo_score_min": 80,
+      "best_practices_score_min": 90
+    },
+    "core_web_vitals": {
+      "lcp_ms": 2500,
+      "fid_ms": 100,
+      "cls": 0.1,
+      "ttfb_ms": 800,
+      "fcp_ms": 1800
+    },
+    "bundle_size": {
+      "initial_load_gzipped_kb": 500,
+      "largest_chunk_gzipped_kb": 200
+    }
+  },
+  "infrastructure": {
+    "resource_utilization": {
+      "cpu_warn_percent": 70,
+      "cpu_fail_percent": 90,
+      "memory_warn_percent": 70,
+      "memory_fail_percent": 90,
+      "disk_warn_percent": 80,
+      "disk_fail_percent": 95
+    },
+    "database": {
+      "connection_pool_warn_percent": 70,
+      "slow_query_threshold_ms": 500,
+      "replication_lag_warn_s": 30,
+      "replication_lag_fail_s": 60
+    },
+    "queue": {
+      "max_depth_warn": 1000,
+      "max_depth_fail": 5000,
+      "job_processing_timeout_s": 300
+    },
+    "redis": {
+      "memory_warn_mb": 512,
+      "memory_fail_mb": 1024
+    }
+  },
+  "regression": {
+    "response_time_regression_threshold_percent": 20,
+    "resource_utilization_regression_threshold_percent": 30,
+    "description": "Flag if metrics degrade beyond these thresholds vs previous release"
+  }
+}
