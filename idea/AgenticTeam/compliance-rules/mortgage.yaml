@@ -1,0 +1,285 @@
+rules:
+  - id: MORT-001
+    name: Fair Lending Violation - Prohibited Factor in Decision
+    description: Loan decision agent used a prohibited factor (race, color, religion, national origin, sex, marital status, age) as input to underwriting
+    severity: critical
+    regulation: ECOA
+    section: "Reg B - 12 CFR 1002.4"
+    conditions:
+      - field: "trace.spans[*].attributes.decision_type"
+        operator: "in"
+        value: ["underwriting", "pricing", "approval", "denial"]
+      - field: "trace.spans[*].attributes.input_fields"
+        operator: "intersects"
+        value: ["race", "color", "religion", "national_origin", "sex", "marital_status", "age", "ethnicity", "disability", "familial_status"]
+    logic: "all"
+    actions:
+      - type: block
+        message: "ECOA violation: Prohibited borrower characteristic used in loan decision. Remove discriminatory input before proceeding."
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: log
+        retention: "7_years"
+      - type: escalate
+        target: "fair-lending-officer"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "fair-lending-team"
+
+  - id: MORT-002
+    name: APR Disclosure Missing or Inaccurate
+    description: Loan estimate or closing disclosure generated without valid APR calculation or with APR tolerance exceeded
+    severity: critical
+    regulation: TILA
+    section: "Reg Z - 12 CFR 1026.22"
+    conditions:
+      - field: "trace.spans[*].attributes.document_type"
+        operator: "in"
+        value: ["loan_estimate", "closing_disclosure"]
+      - field: "trace.spans[*].attributes.apr_calculated"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "TILA violation: APR must be accurately calculated and disclosed. Verify APR calculation before generating disclosure."
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "compliance-team"
+
+  - id: MORT-003
+    name: HMDA Data Integrity Violation
+    description: Agent submitted or modified HMDA-reportable loan data without required demographic fields or with invalid geocoding
+    severity: high
+    regulation: HMDA
+    section: "Reg C - 12 CFR 1003.4"
+    conditions:
+      - field: "trace.spans[*].attributes.operation_type"
+        operator: "in"
+        value: ["hmda_submit", "hmda_update", "lar_entry"]
+      - field: "trace.spans[*].attributes.hmda_fields_complete"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "HMDA violation: All required LAR fields must be complete and valid before submission. Missing or invalid fields detected."
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "hmda-reporting-team"
+
+  - id: MORT-004
+    name: Loan Estimate Timing Violation
+    description: Loan Estimate not provided within 3 business days of receiving a loan application
+    severity: critical
+    regulation: TILA-RESPA
+    section: "Reg Z - 12 CFR 1026.19(e)"
+    conditions:
+      - field: "trace.spans[*].attributes.event_type"
+        operator: "equals"
+        value: "application_received"
+      - field: "trace.spans[*].attributes.loan_estimate_issued"
+        operator: "equals"
+        value: false
+      - field: "trace.spans[*].attributes.business_days_since_application"
+        operator: "greater_than"
+        value: 3
+    logic: "all"
+    actions:
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "loan-operations-manager"
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "origination-team"
+
+  - id: MORT-005
+    name: Kickback or Referral Fee Detected
+    description: Agent processed or recorded a payment that appears to be an unearned fee or kickback for referral of settlement services
+    severity: critical
+    regulation: RESPA
+    section: "Section 8 - 12 USC 2607"
+    conditions:
+      - field: "trace.spans[*].attributes.payment_type"
+        operator: "in"
+        value: ["referral_fee", "marketing_fee", "lead_fee", "affiliate_fee"]
+      - field: "trace.spans[*].attributes.service_rendered_documentation"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: block
+        message: "RESPA Section 8 violation: Potential unearned referral fee detected. All fees must have documented services rendered."
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "legal-team"
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "legal-team"
+
+  - id: MORT-006
+    name: Redlining - Geographic Discrimination Pattern
+    description: Agent's loan decisions show statistically significant adverse patterns correlated with majority-minority census tracts
+    severity: critical
+    regulation: ECOA / Fair Housing Act
+    section: "42 USC 3605 / Reg B"
+    conditions:
+      - field: "trace.spans[*].attributes.decision_type"
+        operator: "in"
+        value: ["denial", "pricing", "counteroffer"]
+      - field: "trace.spans[*].attributes.census_tract_minority_pct"
+        operator: "greater_than"
+        value: 50
+      - field: "trace.spans[*].attributes.denial_rate_disparity_ratio"
+        operator: "greater_than"
+        value: 1.5
+    logic: "all"
+    actions:
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "fair-lending-officer"
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "fair-lending-team"
+      notes: "Disparity ratio >1.5 triggers review per CFPB/DOJ enforcement guidance"
+
+  - id: MORT-007
+    name: Borrower Consent Not Verified
+    description: Agent pulled credit report, ran AUS, or shared borrower data without documented borrower consent
+    severity: critical
+    regulation: FCRA / ECOA
+    section: "15 USC 1681b(a)(2) / Reg B"
+    conditions:
+      - field: "trace.spans[*].attributes.operation_type"
+        operator: "in"
+        value: ["credit_pull", "aus_submission", "third_party_share", "income_verification"]
+      - field: "trace.spans[*].attributes.borrower_consent_documented"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "FCRA/ECOA violation: Borrower consent must be documented before pulling credit, running AUS, or sharing borrower data."
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "origination-team"
+
+  - id: MORT-008
+    name: Servicing Transfer Notice Timing Violation
+    description: Loan servicing transfer occurred without required 15-day advance notice to borrower
+    severity: high
+    regulation: RESPA
+    section: "Reg X - 12 CFR 1024.33(b)"
+    conditions:
+      - field: "trace.spans[*].attributes.event_type"
+        operator: "equals"
+        value: "servicing_transfer"
+      - field: "trace.spans[*].attributes.transfer_notice_days"
+        operator: "less_than"
+        value: 15
+    logic: "all"
+    actions:
+      - type: block
+        message: "RESPA violation: Borrower must receive servicing transfer notice at least 15 days before effective date."
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "servicing-team"
+
+  - id: MORT-009
+    name: Escrow Analysis Accuracy Violation
+    description: Annual escrow analysis computation produced a surplus/shortage outside RESPA tolerance without issuing required refund or adjustment notice
+    severity: high
+    regulation: RESPA
+    section: "Reg X - 12 CFR 1024.17"
+    conditions:
+      - field: "trace.spans[*].attributes.operation_type"
+        operator: "equals"
+        value: "escrow_analysis"
+      - field: "trace.spans[*].attributes.escrow_surplus_amount"
+        operator: "greater_than"
+        value: 50
+      - field: "trace.spans[*].attributes.surplus_refund_issued"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: escalate
+        target: "servicing-manager"
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "servicing-team"
+      notes: "RESPA requires refund of escrow surplus >$50 within 30 days of analysis"
+
+  - id: MORT-010
+    name: Adverse Action Notice Missing or Incomplete
+    description: Loan denial or counteroffer issued without providing required adverse action notice with specific reasons
+    severity: critical
+    regulation: ECOA / FCRA
+    section: "Reg B - 12 CFR 1002.9 / 15 USC 1681m"
+    conditions:
+      - field: "trace.spans[*].attributes.decision_type"
+        operator: "in"
+        value: ["denial", "counteroffer", "adverse_pricing"]
+      - field: "trace.spans[*].attributes.adverse_action_notice_sent"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "ECOA/FCRA violation: Adverse action notice with specific reasons must be provided within 30 days of application or denial. Cannot proceed without notice."
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "compliance-team"
+      notes: "Must include up to 4 specific reasons for adverse action per ECOA; FCRA requires credit score disclosure if used"

@@ -21,9 +21,11 @@ const AGENTS = [
   "patient-lookup-agent", "claims-processor", "fraud-detector",
   "trade-surveillance-bot", "document-analyzer", "customer-support-agent",
   "onboarding-assistant", "audit-trail-agent",
+  "loan-underwriting-agent", "mortgage-servicing-bot", "loan-estimate-generator",
+  "hmda-reporting-agent",
 ];
 const MODELS = ["claude-sonnet-4", "gpt-4o", "claude-haiku-4", "gpt-4o-mini", "gemini-2.0-flash"];
-const REGULATIONS: Regulation[] = ["HIPAA", "SOX", "FINRA", "SOC2"];
+const REGULATIONS: Regulation[] = ["HIPAA", "SOX", "FINRA", "SOC2", "Mortgage"];
 const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
 const PROVIDERS = ["Anthropic", "OpenAI", "Google"];
 const RULE_NAMES = [
@@ -32,7 +34,28 @@ const RULE_NAMES = [
   "Audit Trail Tampered", "PHI Unencrypted Transport",
   "Segregation of Duties Violation", "Position Limit Exceeded",
   "PII Without Classification", "Logging Disabled",
+  "Fair Lending Violation - Prohibited Factor", "APR Disclosure Missing",
+  "HMDA Data Integrity Violation", "Loan Estimate Timing Violation",
+  "Kickback or Referral Fee Detected", "Redlining - Geographic Discrimination",
+  "Borrower Consent Not Verified", "Servicing Transfer Notice Timing",
+  "Escrow Analysis Accuracy Violation", "Adverse Action Notice Missing",
 ];
+
+// Map mortgage rule names to their MORT IDs and metadata
+const MORTGAGE_RULES: Array<{ id: string; name: string; severity: Severity; description: string }> = [
+  { id: "MORT-001", name: "Fair Lending Violation - Prohibited Factor", severity: "critical", description: "Loan decision used prohibited borrower characteristic (race, sex, age) — ECOA Reg B violation" },
+  { id: "MORT-002", name: "APR Disclosure Missing", severity: "critical", description: "Loan Estimate generated without valid APR calculation — TILA Reg Z violation" },
+  { id: "MORT-003", name: "HMDA Data Integrity Violation", severity: "high", description: "HMDA-reportable loan data submitted with missing required fields — Reg C violation" },
+  { id: "MORT-004", name: "Loan Estimate Timing Violation", severity: "critical", description: "Loan Estimate not provided within 3 business days of application — TILA-RESPA violation" },
+  { id: "MORT-005", name: "Kickback or Referral Fee Detected", severity: "critical", description: "Unearned referral fee processed without documented services — RESPA Section 8 violation" },
+  { id: "MORT-006", name: "Redlining - Geographic Discrimination", severity: "critical", description: "Loan decisions show adverse pattern in majority-minority census tracts — ECOA/Fair Housing violation" },
+  { id: "MORT-007", name: "Borrower Consent Not Verified", severity: "critical", description: "Credit pull or AUS submission without documented borrower consent — FCRA/ECOA violation" },
+  { id: "MORT-008", name: "Servicing Transfer Notice Timing", severity: "high", description: "Servicing transfer without required 15-day advance borrower notice — RESPA Reg X violation" },
+  { id: "MORT-009", name: "Escrow Analysis Accuracy Violation", severity: "high", description: "Escrow surplus >$50 not refunded within required timeframe — RESPA Reg X violation" },
+  { id: "MORT-010", name: "Adverse Action Notice Missing", severity: "critical", description: "Loan denial issued without adverse action notice with specific reasons — ECOA/FCRA violation" },
+];
+
+const MORTGAGE_AGENTS = ["loan-underwriting-agent", "mortgage-servicing-bot", "loan-estimate-generator", "hmda-reporting-agent"];
 
 // ── Span generator ───────────────────────────────────────────────────
 
@@ -90,26 +113,44 @@ export function generateTrace(minutesAgo?: number): Trace {
   const maxEnd = Math.max(...allSpans.map((s) => s.endTime));
   const violations: Violation[] = [];
   const hasFail = allSpans.some((s) => s.status === "fail");
+  const agentName = pick(AGENTS);
+  const isMortgageAgent = MORTGAGE_AGENTS.includes(agentName);
 
   if (hasFail) {
-    violations.push({
-      ruleId: `${pick(REGULATIONS)}-${String(randInt(1, 10)).padStart(3, "0")}`,
-      ruleName: pick(RULE_NAMES),
-      severity: pick(SEVERITIES),
-      regulation: pick(REGULATIONS),
-      description: "Compliance rule violated during agent execution",
-      spanId: allSpans.find((s) => s.status === "fail")?.spanId ?? "",
-      spanName: allSpans.find((s) => s.status === "fail")?.name ?? "",
-      timestamp: ago(minutesAgo ?? randInt(1, 300)),
-    });
+    if (isMortgageAgent) {
+      // Use mortgage-specific violation details
+      const mortRule = pick(MORTGAGE_RULES);
+      violations.push({
+        ruleId: mortRule.id,
+        ruleName: mortRule.name,
+        severity: mortRule.severity,
+        regulation: "Mortgage" as Regulation,
+        description: mortRule.description,
+        spanId: allSpans.find((s) => s.status === "fail")?.spanId ?? "",
+        spanName: allSpans.find((s) => s.status === "fail")?.name ?? "",
+        timestamp: ago(minutesAgo ?? randInt(1, 300)),
+      });
+    } else {
+      violations.push({
+        ruleId: `${pick(REGULATIONS)}-${String(randInt(1, 10)).padStart(3, "0")}`,
+        ruleName: pick(RULE_NAMES),
+        severity: pick(SEVERITIES),
+        regulation: pick(REGULATIONS),
+        description: "Compliance rule violated during agent execution",
+        spanId: allSpans.find((s) => s.status === "fail")?.spanId ?? "",
+        spanName: allSpans.find((s) => s.status === "fail")?.name ?? "",
+        timestamp: ago(minutesAgo ?? randInt(1, 300)),
+      });
+    }
   }
 
   const totalCost = allSpans.reduce((sum, s) => sum + (s.cost ?? 0), 0);
+  const regulation = isMortgageAgent ? "Mortgage" as Regulation : pick(REGULATIONS);
 
   return {
     traceId: uid(),
     name: root.name,
-    agentName: pick(AGENTS),
+    agentName,
     startTime: ago(minutesAgo ?? randInt(1, 1440)),
     durationMs: Math.round(maxEnd),
     spanCount: allSpans.length,
@@ -117,7 +158,7 @@ export function generateTrace(minutesAgo?: number): Trace {
     violations,
     spans: allSpans,
     totalCost,
-    regulation: pick(REGULATIONS),
+    regulation,
   };
 }
 
@@ -157,14 +198,26 @@ export function generateAgentStats(): AgentStats[] {
 // ── Rule stats ───────────────────────────────────────────────────────
 
 export function generateRuleStats(): RuleStats[] {
-  return RULE_NAMES.map((name, i) => ({
-    ruleId: `${pick(REGULATIONS)}-${String(i + 1).padStart(3, "0")}`,
+  const NON_MORTGAGE_REGULATIONS: Regulation[] = ["HIPAA", "SOX", "FINRA", "SOC2"];
+  // Non-mortgage rules (first 10)
+  const baseRules = RULE_NAMES.slice(0, 10).map((name, i) => ({
+    ruleId: `${pick(NON_MORTGAGE_REGULATIONS)}-${String(i + 1).padStart(3, "0")}`,
     ruleName: name,
-    regulation: pick(REGULATIONS),
+    regulation: pick(NON_MORTGAGE_REGULATIONS),
     severity: pick(SEVERITIES),
     triggerCount: randInt(1, 200),
     falsePositiveRate: rand(0, 15),
   }));
+  // Mortgage rules (MORT-001 through MORT-010)
+  const mortgageRules = MORTGAGE_RULES.map((rule) => ({
+    ruleId: rule.id,
+    ruleName: rule.name,
+    regulation: "Mortgage" as Regulation,
+    severity: rule.severity,
+    triggerCount: randInt(5, 150),
+    falsePositiveRate: rand(0, 8),
+  }));
+  return [...baseRules, ...mortgageRules];
 }
 
 // ── Activity feed ────────────────────────────────────────────────────
@@ -173,6 +226,9 @@ export function generateActivityFeed(count: number): ActivityEvent[] {
   const actions = [
     "executed trace", "compliance check passed", "compliance violation detected",
     "cost threshold alert", "agent started", "agent completed", "rule evaluated",
+    "MORT-001 fair lending check blocked", "loan estimate timing validated",
+    "HMDA submission verified", "borrower consent confirmed",
+    "MORT-006 redlining pattern flagged", "adverse action notice enforced",
   ];
   return Array.from({ length: count }, (_, i) => ({
     id: uid(),
@@ -229,5 +285,7 @@ export function generateBudgetAlerts(): BudgetAlert[] {
     { id: "1", name: "Daily spend limit", threshold: 100, period: "daily", enabled: true },
     { id: "2", name: "Weekly team budget", threshold: 500, period: "weekly", enabled: true },
     { id: "3", name: "Monthly org budget", threshold: 5000, period: "monthly", enabled: false },
+    { id: "4", name: "Mortgage underwriting agents", threshold: 200, period: "daily", enabled: true },
+    { id: "5", name: "HMDA reporting batch limit", threshold: 150, period: "weekly", enabled: true },
   ];
 }

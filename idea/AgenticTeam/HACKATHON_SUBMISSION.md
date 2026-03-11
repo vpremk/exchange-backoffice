@@ -17,6 +17,7 @@ Every company building with AI agents faces the same terrifying question: **"Is 
 - A healthcare agent accesses patient records without authorization — **HIPAA violation, $50K+ fine per incident**
 - A financial agent modifies ledger entries without dual approval — **SOX violation, criminal liability**
 - A trading bot executes without licensing checks — **FINRA violation, firm shutdown**
+- A mortgage underwriting agent denies loans using zip code as a proxy for race — **ECOA/fair lending violation, DOJ investigation**
 
 Today, compliance teams discover these violations **after the damage is done** — in quarterly audits, customer complaints, or regulator letters. There is no real-time guardrail for AI agent behaviour.
 
@@ -119,13 +120,14 @@ The project is built as a **custom GitLab Duo agent** that:
 - Zero-dependency SDK (stdlib only) — no bloat in customer environments
 - Air-gap friendly: offline disk buffering for regulated environments
 
-### Compliance Rules (40+ pre-built)
+### Compliance Rules (50+ pre-built)
 | Regulation | Rules | Examples |
 |------------|-------|----------|
 | HIPAA | 10 | PHI access control, encryption enforcement, BAA verification |
 | SOX | 10 | Dual approval, segregation of duties, audit trail protection |
 | FINRA | 10 | Trade authorization, wash trading detection, insider info barriers |
 | SOC2 | 10 | Authentication, data exfiltration detection, change management |
+| TILA/RESPA/ECOA (Mortgage) | 10 | Fair lending enforcement, APR disclosure validation, HMDA data integrity, loan estimate timing, kickback detection, redlining prevention, borrower consent verification, servicing transfer notice, escrow analysis accuracy, adverse action notice |
 | Custom | 3+ | Template with regex, chaining, and plugin support |
 
 ### SDK (One-Line Setup)
@@ -157,8 +159,8 @@ compliance-sentinel/
 │   ├── rule_parser.py          # YAML rule loading + validation
 │   └── plugins.py              # Custom rule plugin interface
 ├── sentinel/models/        # Pydantic models
-├── compliance-rules/       # 40+ YAML rule files
-│   ├── hipaa.yaml, sox.yaml, finra.yaml, soc2.yaml
+├── compliance-rules/       # 50+ YAML rule files
+│   ├── hipaa.yaml, sox.yaml, finra.yaml, soc2.yaml, mortgage.yaml
 │   └── custom-template.yaml    # Annotated template
 ├── sdk/python/             # Customer SDK (zero dependencies)
 │   └── sentinel_sdk/           # Client, tracer, cost tracker, buffer
@@ -235,3 +237,47 @@ compliance-sentinel/
 5. **Add Anthropic Claude integration**: Wire Claude into violation explanations + report generation
 6. **Record demo video**: Follow the 3-minute script above
 7. **Submit on Devpost**: Fill in description, video URL, GitLab repo URL
+
+---
+
+## Target Customers
+
+### Primary
+
+| Segment | Regulation | Use Case | Pain |
+|---------|-----------|----------|------|
+| **Healthcare enterprises** | HIPAA | Patient data agents, claims processing, clinical decision support | $50K+ fines per PHI violation; audit prep takes weeks |
+| **Financial services** | SOX / FINRA | Trading bots, fraud detection, GL automation, underwriting agents | Criminal liability for SOX; firm shutdown for FINRA |
+| **Insurance** | SOC2 / HIPAA | Claims automation, customer service bots handling PII | Cannot close enterprise deals without SOC2 proof |
+| **Mortgage lenders & servicers** | TILA / RESPA / ECOA | Loan origination agents, underwriting bots, servicing automation | CFPB fines up to $1M/day; fair lending violations trigger DOJ action |
+| **AI platform teams** (10+ agents) | All | Centralized compliance visibility across departments | No single pane of glass for agent compliance |
+
+### Secondary
+
+| Segment | Why They Buy |
+|---------|-------------|
+| **GRC / Internal Audit teams** | Auto-generated audit-ready reports replace 2-3 weeks of manual prep |
+| **Healthcare / Fintech startups** | Need compliance proof for funding rounds and enterprise contracts but can't afford a compliance team |
+| **System integrators** (Accenture, Deloitte) | Must demonstrate compliance as part of AI agent delivery to regulated clients |
+| **AI framework users** (LangChain, CrewAI, AutoGen) | SDK's one-line setup makes compliance a bolt-on, not a rebuild |
+
+### Buyer Personas
+
+| Persona | Their Question | What They Buy |
+|---------|---------------|---------------|
+| **CISO** | "Can I prove our AI agents aren't leaking data?" | Real-time blocking + audit trail |
+| **Compliance Officer** | "Audit prep takes 3 weeks every quarter" | Auto-generated compliance reports |
+| **VP Engineering** | "Legal keeps blocking our AI feature launches" | Compliance guardrails that unblock shipping |
+| **CTO (startup)** | "We need SOC2 to close enterprise deals" | Pre-built rule sets + compliance dashboard |
+| **Chief Compliance Officer (Mortgage)** | "CFPB exams are coming — can we prove our AI underwriting is fair?" | Fair lending rules (MORT-001/006), adverse action automation (MORT-010), HMDA reporting (MORT-003) |
+| **VP Loan Operations** | "Our agents issue Loan Estimates — how do we guarantee TILA timing?" | LE timing enforcement (MORT-004), APR validation (MORT-002), kickback detection (MORT-005) |
+| **Servicing Director** | "We're migrating 50K loans — transfers need RESPA-compliant notices" | Servicing transfer notice (MORT-008), escrow analysis (MORT-009), borrower consent (MORT-007) |
+
+### Market Context
+
+- Global GRC market: ~$60B by 2027
+- AI governance: fastest-growing GRC segment
+- EU AI Act (2025) and US executive orders are creating **mandatory** compliance requirements for AI systems
+- Every enterprise deploying AI agents will need tooling like this — the question is build vs buy
+
+**Sharpest wedge: Healthcare + HIPAA** — highest fines ($50K/incident), clearest rules, most urgent pain, largest immediately addressable market.

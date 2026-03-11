@@ -57,7 +57,7 @@ export default function CompliancePage() {
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40 h-8 text-sm" />
             </div>
             <div className="flex gap-1">
-              {["all", "HIPAA", "SOX", "FINRA", "SOC2"].map((reg) => (
+              {["all", "HIPAA", "SOX", "FINRA", "SOC2", "Mortgage"].map((reg) => (
                 <Button key={reg} size="sm" variant={regFilter === reg ? "default" : "outline"} onClick={() => setRegFilter(reg)}>
                   {reg === "all" ? "All" : reg}
                 </Button>

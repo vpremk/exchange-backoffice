@@ -1,5 +1,5 @@
 export type Severity = "critical" | "high" | "medium" | "low";
-export type Regulation = "HIPAA" | "SOX" | "FINRA" | "SOC2" | "custom";
+export type Regulation = "HIPAA" | "SOX" | "FINRA" | "SOC2" | "Mortgage" | "custom";
 export type SpanStatus = "pass" | "warn" | "fail";
 
 export interface Span {
