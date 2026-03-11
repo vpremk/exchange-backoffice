@@ -1,0 +1,216 @@
+rules:
+  - id: FINRA-001
+    name: Unauthorized Trade Execution
+    description: Agent executed a trade without proper licensing and authorization
+    severity: critical
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.operation"
+        operator: "equals"
+        value: "trade_execute"
+      - field: "trace.spans[*].attributes.agent_licensed"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Trade execution requires licensed and authorized agent"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "trading-compliance"
+
+  - id: FINRA-002
+    name: Wash Trade Pattern Detected
+    description: Offsetting buy/sell pattern detected that may constitute wash trading
+    severity: critical
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.trade_pattern"
+        operator: "equals"
+        value: "wash_trade"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Potential wash trade detected — trade blocked pending review"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "trading-surveillance"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "trading-surveillance"
+
+  - id: FINRA-003
+    name: Front-Running Detected
+    description: Agent executed personal trade ahead of pending client order
+    severity: critical
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.trade_pattern"
+        operator: "equals"
+        value: "front_running"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Front-running detected — trade blocked"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "head-of-compliance"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "trading-surveillance"
+
+  - id: FINRA-004
+    name: Position Limit Exceeded
+    description: Trading position exceeds configured risk limits
+    severity: high
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.position_limit_exceeded"
+        operator: "equals"
+        value: true
+    logic: "all"
+    actions:
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "risk-management"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "risk-management"
+
+  - id: FINRA-005
+    name: Trade Without Best Execution
+    description: Trade executed without best-execution price verification
+    severity: high
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.operation"
+        operator: "equals"
+        value: "trade_execute"
+      - field: "trace.spans[*].attributes.best_execution_verified"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "trading-compliance"
+
+  - id: FINRA-006
+    name: Insider Information Access
+    description: Agent accessed material non-public information (MNPI) without information barrier
+    severity: critical
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "MNPI"
+      - field: "trace.spans[*].attributes.information_barrier_verified"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: block
+        message: "MNPI access requires information barrier verification"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "compliance-team"
+
+  - id: FINRA-007
+    name: Excessive Trading Activity (Churning)
+    description: Trading frequency exceeds threshold suggesting potential churning
+    severity: high
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.trades_per_day"
+        operator: "greater_than"
+        value: 50
+      - field: "trace.spans[*].attributes.client_initiated"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: escalate
+        target: "trading-surveillance"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "trading-surveillance"
+
+  - id: FINRA-008
+    name: Unapproved Communication Channel
+    description: Client communication occurred on non-archived channel
+    severity: medium
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.communication_channel"
+        operator: "not_in"
+        value: ["email_archived", "chat_archived", "phone_recorded"]
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "compliance-team"
+
+  - id: FINRA-009
+    name: Suitability Violation
+    description: Trade recommendation does not match client risk profile
+    severity: high
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.risk_score"
+        operator: "greater_than"
+        value: 8
+      - field: "trace.spans[*].attributes.client_risk_tolerance"
+        operator: "in"
+        value: ["conservative", "moderate"]
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: escalate
+        target: "branch-manager"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "trading-compliance"
+
+  - id: FINRA-010
+    name: Late Trade Report
+    description: Trade report submitted after regulatory deadline
+    severity: medium
+    regulation: FINRA
+    conditions:
+      - field: "trace.spans[*].attributes.report_delay_minutes"
+        operator: "greater_than"
+        value: 10
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "trading-compliance"

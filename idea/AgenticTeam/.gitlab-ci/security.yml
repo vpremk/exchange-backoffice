@@ -1,0 +1,75 @@
+###############################################################################
+# .gitlab-ci/security.yml — Reusable security scanning templates
+###############################################################################
+
+# ---------------------------------------------------------------------------
+# Bandit — Python SAST
+# ---------------------------------------------------------------------------
+.security-bandit:
+  stage: security
+  image: python:3.11-slim
+  before_script:
+    - pip install --quiet bandit
+  script:
+    - bandit -r backend/
+        --format json
+        --output bandit-report.json
+        --severity-level medium
+        --confidence-level medium
+        --exit-zero
+    - bandit -r backend/
+        --format screen
+        --severity-level medium
+        --confidence-level medium
+  artifacts:
+    when: always
+    paths:
+      - bandit-report.json
+    expire_in: 30 days
+
+# ---------------------------------------------------------------------------
+# npm audit — Frontend dependency vulnerabilities
+# ---------------------------------------------------------------------------
+.security-npm-audit:
+  stage: security
+  image: node:20-alpine
+  script:
+    - cd frontend && npm ci --prefer-offline
+    - npm audit --audit-level=high --json > ../npm-audit-report.json || true
+    - npm audit --audit-level=high || true
+  artifacts:
+    when: always
+    paths:
+      - npm-audit-report.json
+    expire_in: 30 days
+
+# ---------------------------------------------------------------------------
+# Trivy — Container image scanning
+# ---------------------------------------------------------------------------
+.security-trivy:
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  variables:
+    SCAN_IMAGE: ""
+  before_script:
+    - export TRIVY_USERNAME="${CI_REGISTRY_USER}"
+    - export TRIVY_PASSWORD="${CI_REGISTRY_PASSWORD}"
+  script:
+    - REPORT_NAME="trivy-report-$(echo ${SCAN_IMAGE} | tr '/:' '-').json"
+    - trivy image
+        --exit-code 0
+        --severity HIGH,CRITICAL
+        --format json
+        --output "${REPORT_NAME}"
+        "${SCAN_IMAGE}"
+    - trivy image
+        --exit-code 1
+        --severity CRITICAL
+        "${SCAN_IMAGE}"
+  artifacts:
+    when: always
+    paths:
+      - trivy-report-*.json
+    expire_in: 30 days

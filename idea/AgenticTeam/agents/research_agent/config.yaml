@@ -1,0 +1,12 @@
+agent:
+  name: research_agent
+  type: planner
+  memory: vector-db
+  tools:
+    - web-search
+    - market-analysis
+workflow:
+  triggers:
+    - commit
+  outputs:
+    - requirements_doc.md

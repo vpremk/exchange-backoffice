@@ -1,0 +1,216 @@
+rules:
+  - id: SOC2-001
+    name: Unauthorized System Access
+    description: Agent accessed a system without valid authentication credentials
+    severity: critical
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.authenticated"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "Unauthenticated system access is prohibited"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: SOC2-002
+    name: Data Exfiltration Pattern
+    description: Abnormally large data transfer to external destination detected
+    severity: critical
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.destination_type"
+        operator: "equals"
+        value: "external"
+      - field: "trace.spans[*].attributes.bytes_transferred"
+        operator: "greater_than"
+        value: 104857600  # 100 MB
+    logic: "all"
+    actions:
+      - type: block
+        message: "Large external data transfer blocked — requires DLP review"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "security-incident-team"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: SOC2-003
+    name: Privilege Escalation Attempt
+    description: Agent attempted to elevate privileges beyond assigned role
+    severity: critical
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.privilege_escalation"
+        operator: "equals"
+        value: true
+    logic: "all"
+    actions:
+      - type: block
+        message: "Unauthorized privilege escalation blocked"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: SOC2-004
+    name: Encryption Not Enforced
+    description: Data at rest or in transit without required encryption
+    severity: high
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.encryption_enabled"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "3_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: SOC2-005
+    name: Logging Disabled
+    description: Agent operated with security logging turned off
+    severity: high
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.security_logging"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "Security logging must be enabled for all operations"
+      - type: alert
+        channel: slack
+        priority: P2
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: SOC2-006
+    name: Third-Party Integration Without Vendor Assessment
+    description: Integration with external vendor lacking security assessment
+    severity: medium
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.destination_type"
+        operator: "equals"
+        value: "external"
+      - field: "trace.spans[*].attributes.vendor_assessed"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: escalate
+        target: "vendor-management"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "vendor-management"
+
+  - id: SOC2-007
+    name: Change Without Change Management
+    description: Production system change made without approved change request
+    severity: high
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.environment"
+        operator: "equals"
+        value: "production"
+      - field: "trace.spans[*].attributes.operation"
+        operator: "in"
+        value: ["deploy", "config_change", "schema_migration"]
+      - field: "trace.spans[*].attributes.change_ticket"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Production changes require an approved change ticket"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "engineering-ops"
+
+  - id: SOC2-008
+    name: Backup Verification Missing
+    description: Data operation performed without recent backup verification
+    severity: medium
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.operation"
+        operator: "in"
+        value: ["delete", "truncate", "schema_migration"]
+      - field: "trace.spans[*].attributes.backup_verified"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "3_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "engineering-ops"
+
+  - id: SOC2-009
+    name: Excessive Failed Authentication
+    description: Multiple failed authentication attempts from single agent
+    severity: high
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.failed_auth_count"
+        operator: "greater_than"
+        value: 5
+    logic: "all"
+    actions:
+      - type: block
+        message: "Account locked due to excessive failed authentication attempts"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: SOC2-010
+    name: PII Accessed Without Data Classification
+    description: Personally identifiable information accessed without data classification label
+    severity: medium
+    regulation: SOC2
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PII"
+      - field: "trace.spans[*].attributes.classification_label"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: log
+        retention: "3_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "data-governance"

@@ -1,0 +1,229 @@
+rules:
+  - id: SOX-001
+    name: Financial Data Modified Without Dual Approval
+    description: Material financial data was modified without dual-control authorization
+    severity: critical
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "financial"
+      - field: "trace.spans[*].attributes.operation"
+        operator: "in"
+        value: ["update", "delete", "modify"]
+      - field: "trace.spans[*].attributes.dual_approval"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Financial data modifications require dual approval"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "finance-compliance"
+
+  - id: SOX-002
+    name: Unauthorized Access to General Ledger
+    description: Agent accessed general ledger without proper role authorization
+    severity: critical
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.system"
+        operator: "equals"
+        value: "general_ledger"
+      - field: "trace.spans[*].attributes.role"
+        operator: "not_in"
+        value: ["finance_admin", "controller", "cfo", "auditor"]
+    logic: "all"
+    actions:
+      - type: block
+        message: "General ledger access restricted to authorized financial roles"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "finance-compliance"
+
+  - id: SOX-003
+    name: Journal Entry Without Supporting Documentation
+    description: A journal entry was created without attached supporting documentation
+    severity: high
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.operation"
+        operator: "equals"
+        value: "journal_entry"
+      - field: "trace.spans[*].attributes.supporting_docs"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: escalate
+        target: "controller"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "finance-compliance"
+
+  - id: SOX-004
+    name: Revenue Recognition Override
+    description: Agent overrode automated revenue recognition without authorization
+    severity: critical
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.operation"
+        operator: "equals"
+        value: "revenue_override"
+      - field: "trace.spans[*].attributes.override_authorized"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Revenue recognition overrides require explicit authorization"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "finance-compliance"
+
+  - id: SOX-005
+    name: Financial Report Generated Outside Close Period
+    description: Financial reports generated outside the designated close period
+    severity: medium
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.operation"
+        operator: "equals"
+        value: "financial_report"
+      - field: "trace.spans[*].attributes.within_close_period"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "finance-compliance"
+
+  - id: SOX-006
+    name: Segregation of Duties Violation
+    description: Same agent performed incompatible financial operations
+    severity: critical
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.sod_violation"
+        operator: "equals"
+        value: true
+    logic: "all"
+    actions:
+      - type: block
+        message: "Segregation of duties violation detected"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "internal-audit"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "internal-audit"
+
+  - id: SOX-007
+    name: Material Transaction Above Threshold
+    description: Financial transaction exceeds material threshold without CFO sign-off
+    severity: high
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.transaction_amount"
+        operator: "greater_than"
+        value: 1000000
+      - field: "trace.spans[*].attributes.cfo_signoff"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: escalate
+        target: "cfo"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "finance-compliance"
+
+  - id: SOX-008
+    name: Audit Trail Tampered
+    description: Agent attempted to modify or delete audit trail records
+    severity: critical
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.target_system"
+        operator: "equals"
+        value: "audit_trail"
+      - field: "trace.spans[*].attributes.operation"
+        operator: "in"
+        value: ["update", "delete", "truncate"]
+    logic: "all"
+    actions:
+      - type: block
+        message: "Audit trail records are immutable"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "internal-audit"
+
+  - id: SOX-009
+    name: Financial System Access Without MFA
+    description: Financial system accessed without multi-factor authentication
+    severity: high
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "financial"
+      - field: "trace.spans[*].attributes.mfa_verified"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: SOX-010
+    name: Intercompany Transaction Without Reconciliation
+    description: Intercompany transaction posted without matching reconciliation entry
+    severity: medium
+    regulation: SOX
+    conditions:
+      - field: "trace.spans[*].attributes.transaction_type"
+        operator: "equals"
+        value: "intercompany"
+      - field: "trace.spans[*].attributes.reconciled"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: escalate
+        target: "controller"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "finance-compliance"

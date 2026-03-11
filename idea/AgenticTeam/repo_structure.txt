@@ -1,0 +1,47 @@
+
+repo-root/
+  agents/
+    research_agent/
+      config.yaml
+      research_agent.py
+    coding_agent/
+      config.yaml
+      coding_agent.py
+    testing_agent/
+      config.yaml
+      testing_agent.py
+    build_agent/
+      config.yaml
+      build_agent.py
+    deploy_agent/
+      config.yaml
+      deploy_agent.py
+    observability_agent/
+      config.yaml
+      observability_agent.py
+  orchestration/
+    agent_orchestrator.py
+    permissions.yaml
+    workflows/
+      sdlc_pipeline.yaml
+  ci/
+    ci_pipeline.yaml
+  deployment/
+    staging.yaml
+    production.yaml
+  README.md
+
+Sample YAML config (agents/research_agent/config.yaml):
+
+agent:
+  name: research_agent
+  type: planner
+  memory: vector-db
+  tools:
+    - web-search
+    - market-analysis
+workflow:
+  triggers:
+    - commit
+  outputs:
+    - requirements_doc.md

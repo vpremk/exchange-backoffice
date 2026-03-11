@@ -1,0 +1,12 @@
+agent:
+  name: deploy_agent
+  type: executor
+  memory: vector-db
+  tools:
+    - deployment-manager
+    - rollback-handler
+workflow:
+  triggers:
+    - build_artifact
+  outputs:
+    - deployment_status

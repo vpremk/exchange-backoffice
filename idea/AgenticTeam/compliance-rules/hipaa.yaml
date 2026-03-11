@@ -1,0 +1,233 @@
+rules:
+  - id: HIPAA-001
+    name: PHI Access Without Authorization
+    description: Agent accessed patient health information without proper authorization context
+    severity: critical
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.authorization_context"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: pagerduty
+        priority: P1
+      - type: block
+        message: "Agent action blocked: PHI access requires authorization"
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "compliance-team"
+
+  - id: HIPAA-002
+    name: PHI Transmitted Over Unencrypted Channel
+    description: Protected health information was sent without TLS/encryption
+    severity: critical
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.transport_encrypted"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "PHI must be transmitted over encrypted channels"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: HIPAA-003
+    name: PHI Stored Without Encryption at Rest
+    description: PHI data written to storage without encryption-at-rest enabled
+    severity: critical
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.storage_encrypted"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "PHI must be encrypted at rest"
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: HIPAA-004
+    name: PHI Bulk Export Without Approval
+    description: Bulk export of PHI records exceeded threshold without approval
+    severity: high
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.record_count"
+        operator: "greater_than"
+        value: 100
+      - field: "trace.spans[*].attributes.export_approved"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: escalate
+        target: "privacy-officer"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "privacy-team"
+
+  - id: HIPAA-005
+    name: Minimum Necessary Violation
+    description: Agent accessed more PHI fields than required for the operation
+    severity: high
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.phi_fields_accessed"
+        operator: "greater_than"
+        value: 5
+      - field: "trace.spans[*].attributes.minimum_necessary_justified"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "compliance-team"
+
+  - id: HIPAA-006
+    name: PHI Access Outside Business Hours
+    description: Patient data accessed outside normal business hours without on-call context
+    severity: medium
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.access_hour"
+        operator: "not_in"
+        value: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+      - field: "trace.spans[*].attributes.on_call_context"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "compliance-team"
+
+  - id: HIPAA-007
+    name: PHI Shared With Unauthorized Third Party
+    description: PHI data was sent to an external service not on the approved BAA list
+    severity: critical
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.destination_type"
+        operator: "equals"
+        value: "external"
+      - field: "trace.spans[*].attributes.baa_verified"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Cannot share PHI with external parties without verified BAA"
+      - type: alert
+        channel: pagerduty
+        priority: P1
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "legal-team"
+
+  - id: HIPAA-008
+    name: Audit Log Disabled for PHI Operation
+    description: An operation on PHI was performed with audit logging disabled
+    severity: high
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.audit_logging_enabled"
+        operator: "equals"
+        value: false
+    logic: "all"
+    actions:
+      - type: block
+        message: "Audit logging must be enabled for all PHI operations"
+      - type: alert
+        channel: slack
+        priority: P2
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  - id: HIPAA-009
+    name: PHI Retention Period Exceeded
+    description: PHI data retained beyond the maximum allowed retention period
+    severity: medium
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.data_category"
+        operator: "contains"
+        value: "PHI"
+      - field: "trace.spans[*].attributes.data_age_days"
+        operator: "greater_than"
+        value: 2555  # ~7 years
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: escalate
+        target: "privacy-officer"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "compliance-team"
+
+  - id: HIPAA-010
+    name: Patient Data in Log Output
+    description: Agent logged patient-identifiable information to application logs
+    severity: high
+    regulation: HIPAA
+    conditions:
+      - field: "trace.spans[*].attributes.log_contains_phi"
+        operator: "equals"
+        value: true
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P2
+      - type: log
+        retention: "7_years"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"

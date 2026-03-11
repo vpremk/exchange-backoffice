@@ -1,0 +1,12 @@
+agent:
+  name: testing_agent
+  type: validator
+  memory: vector-db
+  tools:
+    - test-generation
+    - test-execution
+workflow:
+  triggers:
+    - source_code
+  outputs:
+    - test_results

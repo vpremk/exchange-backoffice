@@ -1,0 +1,12 @@
+agent:
+  name: coding_agent
+  type: executor
+  memory: vector-db
+  tools:
+    - code-generation
+    - code-review
+workflow:
+  triggers:
+    - requirements_doc
+  outputs:
+    - source_code

@@ -1,0 +1,20 @@
+pipeline:
+  name: sdlc_pipeline
+  stages:
+    - name: research
+      agent: research_agent
+    - name: coding
+      agent: coding_agent
+      depends_on: research
+    - name: testing
+      agent: testing_agent
+      depends_on: coding
+    - name: build
+      agent: build_agent
+      depends_on: testing
+    - name: deploy
+      agent: deploy_agent
+      depends_on: build
+    - name: observe
+      agent: observability_agent
+      depends_on: deploy

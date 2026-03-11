@@ -1,0 +1,12 @@
+agent:
+  name: build_agent
+  type: executor
+  memory: vector-db
+  tools:
+    - build-runner
+    - artifact-manager
+workflow:
+  triggers:
+    - test_results
+  outputs:
+    - build_artifact

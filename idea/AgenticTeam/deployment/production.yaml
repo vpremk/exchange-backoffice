@@ -1,0 +1,7 @@
+deployment:
+  environment: production
+  strategy: blue-green
+  replicas: 4
+  health_check:
+    path: /health
+    interval: 15s

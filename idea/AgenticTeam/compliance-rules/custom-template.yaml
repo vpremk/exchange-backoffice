@@ -1,0 +1,135 @@
+# ===========================================================================
+# Custom Rule Template — Compliance Sentinel
+#
+# Copy this file and modify it to create your own compliance rules.
+# Place the file in the compliance-rules/ directory and it will be
+# automatically loaded by the engine.
+#
+# FIELD REFERENCE
+# ---------------
+# Fields use dot-notation with [*] for list expansion:
+#   trace.spans[*].attributes.<your_attribute>
+#
+# OPERATOR REFERENCE
+# ------------------
+#   equals          — exact match (any type)
+#   not_equals      — inverse of equals
+#   contains        — substring match (strings) or element in list
+#   not_contains    — inverse of contains
+#   in              — value is one of the items in a list
+#   not_in          — value is not in the list
+#   greater_than    — numeric comparison (>)
+#   less_than       — numeric comparison (<)
+#   regex           — regular expression match
+#   is_empty        — field is null, "", [], or missing
+#   is_not_empty    — field has a non-empty value
+#   exists          — field is present in the data
+#   not_exists      — field is absent from the data
+#
+# LOGIC
+# -----
+#   all — every condition must be true (AND)
+#   any — at least one condition must be true (OR)
+#
+# ACTIONS
+# -------
+#   alert     — send notification (channel: slack|pagerduty|email, priority: P1-P4)
+#   block     — prevent the agent action (message: explanation text)
+#   log       — record for audit trail (retention: duration string)
+#   escalate  — route to a person or team (target: role or team name)
+#
+# RULE CHAINING
+# -------------
+# Use `depends_on` to make a rule only fire if another rule PASSED.
+# Example: CUSTOM-002 depends_on CUSTOM-001 means CUSTOM-002 only
+# evaluates if CUSTOM-001 did NOT trigger a violation.
+#
+# CUSTOM PLUGINS
+# --------------
+# Set `plugin` to a dotted Python path. The function receives (span, rule)
+# and returns True if the rule is violated.
+# Example: plugin: "mycompany.rules.check_model_bias"
+# ===========================================================================
+
+rules:
+  # ── Example 1: Simple attribute check ─────────────────────────────────
+  - id: CUSTOM-001
+    name: Example Data Classification Check
+    description: Ensure all data operations have a classification label
+    severity: medium
+    regulation: custom
+    conditions:
+      - field: "trace.spans[*].attributes.operation"
+        operator: "in"
+        value: ["read", "write", "delete"]
+      - field: "trace.spans[*].attributes.classification_label"
+        operator: "is_empty"
+    logic: "all"
+    actions:
+      - type: alert
+        channel: slack
+        priority: P3
+      - type: log
+        retention: "1_year"
+    metadata:
+      effective_date: "2024-01-01"
+      review_date: "2025-01-01"
+      owner: "your-team"
+      version: "1.0"
+
+  # ── Example 2: Rule chaining ──────────────────────────────────────────
+  - id: CUSTOM-002
+    name: Example Chained Rule
+    description: Only fires if CUSTOM-001 passed (no violation)
+    severity: low
+    regulation: custom
+    depends_on: "CUSTOM-001"
+    conditions:
+      - field: "trace.spans[*].attributes.environment"
+        operator: "equals"
+        value: "production"
+    logic: "all"
+    actions:
+      - type: log
+        retention: "90_days"
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "your-team"
+
+  # ── Example 3: Regex matching ─────────────────────────────────────────
+  - id: CUSTOM-003
+    name: Example Regex Rule
+    description: Detect SSN-like patterns in agent output
+    severity: high
+    regulation: custom
+    conditions:
+      - field: "trace.spans[*].attributes.output_text"
+        operator: "regex"
+        value: "\\d{3}-\\d{2}-\\d{4}"
+    logic: "all"
+    actions:
+      - type: block
+        message: "Output contains SSN-like pattern — redaction required"
+      - type: alert
+        channel: slack
+        priority: P2
+    metadata:
+      effective_date: "2024-01-01"
+      owner: "security-team"
+
+  # ── Example 4: Plugin-based rule ──────────────────────────────────────
+  # - id: CUSTOM-004
+  #   name: Example Plugin Rule
+  #   description: Uses a custom Python function for evaluation
+  #   severity: medium
+  #   regulation: custom
+  #   plugin: "mycompany.compliance.plugins.check_model_bias"
+  #   conditions: []   # conditions are ignored when plugin is set
+  #   logic: "all"
+  #   actions:
+  #     - type: alert
+  #       channel: slack
+  #       priority: P3
+  #   metadata:
+  #     effective_date: "2024-01-01"
+  #     owner: "ml-team"

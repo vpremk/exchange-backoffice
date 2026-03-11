@@ -1,0 +1,7 @@
+deployment:
+  environment: staging
+  strategy: rolling
+  replicas: 2
+  health_check:
+    path: /health
+    interval: 30s

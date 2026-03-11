@@ -1,0 +1,69 @@
+###############################################################################
+# .gitlab-ci/deploy.yml — Reusable deploy & smoke-test templates
+###############################################################################
+
+# ---------------------------------------------------------------------------
+# Deploy: dispatches to docker-compose (dev) or helm (staging/prod)
+# ---------------------------------------------------------------------------
+.deploy:
+  image: alpine:3.19
+  variables:
+    DEPLOY_ENV: ""
+    DEPLOY_METHOD: ""
+  before_script:
+    - apk add --no-cache bash curl docker-cli
+    # Install helm only when needed
+    - |
+      if [ "${DEPLOY_METHOD}" = "helm" ]; then
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      fi
+  script:
+    - chmod +x deploy.sh
+    - |
+      ./deploy.sh \
+        --env "${DEPLOY_ENV}" \
+        --method "${DEPLOY_METHOD}" \
+        --backend-image "${BACKEND_IMAGE}:${CI_COMMIT_SHORT_SHA}" \
+        --frontend-image "${FRONTEND_IMAGE}:${CI_COMMIT_SHORT_SHA}" \
+        --db-password "${SENTINEL_DB_PASSWORD}" \
+        --redis-url "${SENTINEL_REDIS_URL}" \
+        --clickhouse-url "${SENTINEL_CLICKHOUSE_URL}"
+
+# ---------------------------------------------------------------------------
+# Smoke test: basic health check + API validation
+# ---------------------------------------------------------------------------
+.smoke-test:
+  image: alpine:3.19
+  variables:
+    TARGET_URL: ""
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "Running smoke tests against ${TARGET_URL}"
+    # Health check with retries
+    - |
+      for i in $(seq 1 12); do
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${TARGET_URL}/api/health" || echo "000")
+        if [ "${STATUS}" = "200" ]; then
+          echo "Health check passed (attempt ${i})"
+          break
+        fi
+        echo "Waiting for service... (attempt ${i}, status=${STATUS})"
+        sleep 10
+      done
+      if [ "${STATUS}" != "200" ]; then
+        echo "ERROR: Health check failed after 12 attempts"
+        exit 1
+      fi
+    # API validation
+    - |
+      echo "Checking /api/health response body..."
+      HEALTH=$(curl -sf "${TARGET_URL}/api/health")
+      echo "${HEALTH}" | jq .
+      echo "${HEALTH}" | jq -e '.status == "ok"' > /dev/null
+    - |
+      echo "Checking /api/version..."
+      VERSION=$(curl -sf "${TARGET_URL}/api/version")
+      echo "${VERSION}" | jq .
+      echo "${VERSION}" | jq -e '.version' > /dev/null
+    - echo "All smoke tests passed."

@@ -1,0 +1,12 @@
+agent:
+  name: observability_agent
+  type: monitor
+  memory: vector-db
+  tools:
+    - log-analyzer
+    - metrics-collector
+workflow:
+  triggers:
+    - deployment_status
+  outputs:
+    - observability_report

@@ -1,0 +1,20 @@
+permissions:
+  research_agent:
+    - read: requirements
+    - write: requirements_doc
+  coding_agent:
+    - read: requirements_doc
+    - write: source_code
+  testing_agent:
+    - read: source_code
+    - write: test_results
+  build_agent:
+    - read: source_code
+    - read: test_results
+    - write: build_artifact
+  deploy_agent:
+    - read: build_artifact
+    - write: deployment_status
+  observability_agent:
+    - read: deployment_status
+    - write: observability_report
