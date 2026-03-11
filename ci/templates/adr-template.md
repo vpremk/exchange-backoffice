@@ -1,4 +1,4 @@
-# ADR-<NNN>: <Title>
+# ADR 
 
 ## Status
 Proposed | Accepted | Deprecated | Superseded by ADR-<NNN>
